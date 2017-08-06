@@ -1,29 +1,31 @@
-FROM golang:1.8-alpine
+FROM golang:1.8 as builder
 
 
 ENV VERSION=0.8.0
 
 RUN mkdir -p /go/src
 
-ADD https://github.com/go-graphite/carbonapi/archive/${VERSION}.zip /tmp/carbonapi.zip
+RUN set -x \
+    && cd /go/src \
+    && git clone https://github.com/go-graphite/carbonapi.git
 
 # build carbonapi
-RUN set -x                                           \
-    && apk add --update git                          \
-    && cd /go/src                                    \
-    && unzip /tmp/carbonapi.zip                      \
-    && mv /go/src/carbonapi-* /go/src/carbonapi      \
-    && cd /go/src/carbonapi                          \
-    && go-wrapper download                           \
-    && go-wrapper install                            \
-    && apk del git                                   \
-    && rm -f /tmp/carbonapi.zip                      \
-    && rm -rf /var/cache/apk/*
+WORKDIR /go/src/carbonapi
+RUN git checkout ${VERSION}
+RUN go-wrapper download
 
-EXPOSE 8080
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o carbonapi .
+
+
+
+FROM alpine
+
+COPY --from=builder /go/src/carbonapi/carbonapi /sbin/
 
 COPY entrypoint.sh /entrypoint.sh
 COPY carbonapi.yaml /etc/carbonapi.yaml
 
+EXPOSE 8080
 ENTRYPOINT [ "/entrypoint.sh" ]
-CMD [ "/go/bin/carbonapi", "-config", "/etc/carbonapi.yaml"]
+CMD [ "/sbin/carbonapi", "-config", "/etc/carbonapi.yaml"]
