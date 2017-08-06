@@ -1,11 +1,14 @@
-FROM golang:1.8 as builder
+# Stage: Build
+FROM golang:1.8-alpine as builder
 
 
 ENV VERSION=0.8.0
 
-RUN mkdir -p /go/src
+RUN set -x \
+    && apk --update add git
 
 RUN set -x \
+    && mkdir -p /go/src \
     && cd /go/src \
     && git clone https://github.com/go-graphite/carbonapi.git
 
@@ -15,10 +18,10 @@ RUN git checkout ${VERSION}
 RUN go-wrapper download
 
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o carbonapi .
+RUN go build
 
 
-
+# Stage: Run
 FROM alpine
 
 COPY --from=builder /go/src/carbonapi/carbonapi /sbin/
